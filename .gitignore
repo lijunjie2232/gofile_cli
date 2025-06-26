@@ -136,3 +136,13 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+
+debug.py
+*_dev.py
+
+model*
+*.bin
+
+*test*.py
+*debug*.py

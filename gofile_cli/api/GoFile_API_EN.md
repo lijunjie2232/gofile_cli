@@ -1,112 +1,112 @@
-# Gofile API 集成指南
+# Gofile API Integration Guide
 
-## 认证
-- 所有请求必须包含以下认证头：
+## Authentication
+- All requests must include the following authentication header:
 ```http
-Authorization: Bearer 您的_API_TOKEN
+Authorization: Bearer your_api_token
 ```
 
-## 端点概览
+## Endpoint Overview
 
-### 上传文件
+### File Upload
 ```http
 POST https://upload.gofile.io/uploadfile
 ```
-- 参数：
-  - `file`（必需）- 要上传的文件
-  - `folderId`（可选）- 目标文件夹ID
+- Parameters:
+  - `file` (required) - The file to upload
+  - `folderId` (optional) - Target folder ID
 
-提供区域端点以优化性能。
+Regional endpoints are available for performance optimization.
 
-### 文件夹管理
-1. 创建文件夹：
+### Folder Management
+1. Create a folder:
 ```http
 POST https://api.gofile.io/contents/createFolder
 ```
-- 参数：
-  - `parentFolderId`（必需）
-  - `folderName`（可选）
+- Parameters:
+  - `parentFolderId` (required)
+  - `folderName` (optional)
 
-2. 更新文件夹属性：
+2. Update folder attributes:
 ```http
 PUT https://api.gofile.io/contents/{contentId}/update
 ```
-- 可修改属性：名称、描述、标签、公开状态、过期时间、密码
+- Updatable attributes: name, description, tags, public status, expiration time, password
 
-### 内容管理
-1. 删除内容：
+### Content Management
+1. Delete content:
 ```http
 DELETE https://api.gofile.io/contents
 ```
-- 参数：`contentsId`（逗号分隔的ID列表）
+- Parameter: `contentsId` (comma-separated list of IDs)
 
-2. 获取内容信息：
+2. Get content information:
 ```http
 GET https://api.gofile.io/contents/{contentId}
 ```
-- 可选：`password`（用于受保护内容的SHA-256哈希密码）
+- Optional: `password` (SHA-256 hash password for protected content)
 
-3. 搜索内容：
+3. Search content:
 ```http
 GET https://api.gofile.io/contents/search
 ```
-- 参数：`contentId`（搜索位置）、`searchedString`
+- Parameters: `contentId` (search location), `searchedString`
 
-### 直接链接
-1. 创建直接链接：
+### Direct Links
+1. Create a direct link:
 ```http
 POST https://api.gofile.io/contents/{contentId}/directlinks
 ```
-- 可配置限制：expireTime、sourceIpsAllowed、domainsAllowed、auth
+- Configurable limits: expireTime, sourceIpsAllowed, domainsAllowed, auth
 
-2. 更新直接链接：
+2. Update a direct link:
 ```http
 PUT https://api.gofile.io/contents/{contentId}/directlinks/{directLinkId}
 ```
 
-3. 删除直接链接：
+3. Delete a direct link:
 ```http
 DELETE https://api.gofile.io/contents/{contentId}/directlinks/{directLinkId}
 ```
 
-### 内容操作
-1. 复制内容：
+### Content Operations
+1. Copy content:
 ```http
 POST https://api.gofile.io/contents/copy
 ```
-- 参数：`contentsId`、`folderId`
+- Parameters: `contentsId`, `folderId`
 
-2. 移动内容：
+2. Move content:
 ```http
 PUT https://api.gofile.io/contents/move
 ```
-- 参数：`contentsId`、`folderId`
+- Parameters: `contentsId`, `folderId`
 
-3. 导入公共内容：
+3. Import public content:
 ```http
 POST https://api.gofile.io/contents/import
 ```
-- 参数：`contentsId`
+- Parameters: `contentsId`
 
-### 账户管理
-1. 获取账户ID：
+### Account Management
+1. Get account ID:
 ```http
 GET https://api.gofile.io/accounts/getid
 ```
 
-2. 获取账户信息：
+2. Get account information:
 ```http
 GET https://api.gofile.io/accounts/{accountId}
 ```
 
-3. 重置API令牌：
+3. Reset API token:
 ```http
 POST https://api.gofile.io/accounts/{accountId}/resettoken
 ```
 
-## 重要说明
-- **高级账户要求**：大多数端点需要高级账户
-- **速率限制**：按端点实施速率限制；过度使用可能导致IP被封禁
-- **账户结构**：永久根文件夹作为所有内容的基础
-- **数据删除**：DELETE操作是永久性的且不可逆
-- **BETA状态**：API处于测试阶段，可能会发生变化；请定期查看文档更新
+## Important Notes
+- **Premium Account Requirement**: Most endpoints require a premium account
+- **Rate Limiting**: Rate limits are applied per endpoint; excessive usage may result in IP blocking
+- **Account Structure**: A permanent root folder serves as the base for all content
+- **Data Deletion**: DELETE operations are permanent and irreversible
+- **BETA Status**: The API is in beta testing and may change; please check for documentation updates regularly
