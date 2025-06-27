@@ -30,3 +30,17 @@ def message_filter(MAIL_TM, account, waiting_time=120):
             if result:
                 return result[0]
         sleep(5)
+
+
+def convert_bytes_to_readable(size_bytes):
+    units = ["B", "KB", "MB", "GB"]
+    index = 0
+    while size_bytes >= 1024.0 and index < len(units) - 1:
+        size_bytes /= 1024.0
+        index += 1
+    bstr = f"{size_bytes:.2f}"
+    while bstr.endswith("0"):
+        bstr = bstr[:-1]
+    if bstr.endswith("."):
+        bstr = bstr[:-1]
+    return f"{bstr} {units[index]}"
