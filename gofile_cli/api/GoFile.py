@@ -46,9 +46,11 @@ class GoFile:
     def __init__(
         self,
         authorization_token,
+        username=None,
         session: Session = None,
     ):
         self.token = authorization_token
+        self.username = username
         self.session = session or Session()
         self.session.headers.update(self._get_headers())
         self.wt = GoFile.get_wt()
@@ -345,7 +347,7 @@ class GoFile:
         password_hash=None,
         contentFilter=None,
         page: int = 1,
-        pageSize: int = 20,
+        pageSize: int = 1000,
         sortField: str = "name",
         sortDirection: int = 1,
     ) -> FolderContentInfo | FileContentInfo:
@@ -367,6 +369,7 @@ class GoFile:
             params=params,
         )
         data = response.json()
+        assert data, FileNotFoundError()
         content_type = data["data"].get("type", "folder")
         if content_type == "folder":
             return FolderContentInfo(**data)
