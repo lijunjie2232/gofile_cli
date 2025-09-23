@@ -3,3 +3,5 @@ requests
 rich
 textual
 requests_toolbelt
+peewee
+readline
