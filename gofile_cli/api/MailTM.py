@@ -93,6 +93,18 @@ class MailTM:
             response.json(),
         )
 
+    def create_account(
+        self,
+    ) -> (Account, str, str):
+        domain = (self.get_domains()).hydra_member[0].domain
+        address = f"{random_string()}@{domain}"
+        password = random_string()
+        account = self.get_account(
+            address=address,
+            password=password,
+        )
+        return account, address, password
+
     def get_account(
         self,
         address: str = None,
@@ -190,6 +202,8 @@ class MailTM:
         """
         https://docs.mail.tm/#get-me
         """
+        if isinstance(token, Token):
+            token = token.token
         response = self.session.get(
             f"{self.API_URL}/me",
             headers={"Authorization": f"Bearer {token}"},
