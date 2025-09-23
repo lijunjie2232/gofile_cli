@@ -271,7 +271,7 @@ class GoFileShell(cmd.Cmd):
         try:
             args = self.parser.parse_args(("download", *line.split()))
         except:
-            print_exc()
+            # print_exc()
             return
             # raise e
         if "-h" in line or "--help" in line:
