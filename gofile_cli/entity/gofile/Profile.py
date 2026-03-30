@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
-from .StatsCurrent import StatsCurrent
+
 from .IpInfo import IpInfo
+from .StatsCurrent import StatsCurrent
 
 
 class Profile(BaseModel):

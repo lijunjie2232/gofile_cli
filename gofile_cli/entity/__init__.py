@@ -1,36 +1,12 @@
-from .mailtm import (
-    Account,
-    Token,
-    Domains,
-    Domain,
-    Attachment,
-    Mapping,
-    Message,
-    MessageFromTo,
-    MessageSearch,
-    MessageSource,
-    MessageView,
-    Messages,
-    OneMessage,
-    MailTMInvalidResponse,
-)
-from .gofile import (
-    IpInfo,
-    Profile,
-    ProfileData,
-    StatsCurrent,
-    FileInfo,
-    FolderInfo,
-    ContentMetadata,
-    ContentInfo,
-    FileContentInfo,
-    FolderContentInfo,
-    ContentCreateData,
-    ContentCreateInfo,
-    ContentDeleteInfo,
-    ContentUploadData,
-    ContentUploadInfo,
-)
+from .gofile import (ContentCreateData, ContentCreateInfo, ContentDeleteInfo,
+                     ContentInfo, ContentMetadata, ContentUploadData,
+                     ContentUploadInfo, FileContentInfo, FileInfo,
+                     FolderContentInfo, FolderInfo, IpInfo, Profile,
+                     ProfileData, StatsCurrent)
+from .mailtm import (Account, Attachment, Domain, Domains,
+                     MailTMInvalidResponse, Mapping, Message, MessageFromTo,
+                     Messages, MessageSearch, MessageSource, MessageView,
+                     OneMessage, Token)
 
 __all__ = (
     "Account",
