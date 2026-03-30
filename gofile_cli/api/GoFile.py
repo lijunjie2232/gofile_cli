@@ -1,35 +1,40 @@
-from requests import post, get, Session
-from gofile_cli.entity import Account
-from gofile_cli.entity.gofile import (
-    ProfileData,
-    Profile,
-    ContentInfo,
-    FileContentInfo,
-    FolderContentInfo,
-    ContentCreateInfo,
-    ContentDeleteInfo,
-    ContentUploadInfo,
-)
-from gofile_cli.utils import calculate_md5
-import re
-from pathlib import Path
-import logging
-import hashlib
-from rich.progress import (
-    Progress,
-    BarColumn,
-    TextColumn,
-    DownloadColumn,
-    TransferSpeedColumn,
-    TimeRemainingColumn,
-    TimeElapsedColumn,
-)
-from contextlib import nullcontext
-from requests_toolbelt.multipart.encoder import (
-    MultipartEncoder,
-    MultipartEncoderMonitor,
-)
+"""
+GoFile API Client Module
 
+This module provides a comprehensive Python client for the GoFile.io file hosting service.
+It enables file upload, download, folder management, and content operations through
+a simple and intuitive interface.
+
+Main Classes:
+    GoFile: Primary class for interacting with GoFile API endpoints.
+
+Example Usage:
+    >>> from gofile_cli.api import GoFile
+    >>> gofile = GoFile(authorization_token="your_token")
+    >>> profile = gofile.get_me()
+    >>> print(f"Logged in as: {profile.email}")
+"""
+
+import hashlib
+import logging
+import re
+from contextlib import nullcontext
+from pathlib import Path
+from typing import Optional, Union
+
+from requests import Session, get, post
+from requests_toolbelt.multipart.encoder import (MultipartEncoder,
+                                                 MultipartEncoderMonitor)
+from rich.progress import (BarColumn, DownloadColumn, Progress, TextColumn,
+                           TimeElapsedColumn, TimeRemainingColumn,
+                           TransferSpeedColumn)
+
+from gofile_cli.entity import Account
+from gofile_cli.entity.gofile import (ContentCreateInfo, ContentDeleteInfo,
+                                      ContentInfo, ContentUploadInfo,
+                                      FileContentInfo, FolderContentInfo,
+                                      Profile, ProfileData)
+from gofile_cli.utils import calculate_md5
 
 logger = logging.getLogger("GoFile")
 
@@ -38,6 +43,27 @@ WT_PATTERN = re.compile(r"appdata.wt.*?=.*?\"(.*?)\"")
 
 
 class GoFile:
+    """
+    A comprehensive client for the GoFile.io file hosting service API.
+    
+    This class provides methods for all GoFile API operations including:
+    - User authentication and profile management
+    - File upload and download with progress tracking
+    - Folder creation and content organization
+    - Content metadata retrieval and modification
+    - Direct link management
+    
+    Attributes:
+        token (str): Authorization token for API access.
+        username (str, optional): Username of the authenticated user.
+        session (Session): Requests session for HTTP operations.
+        wt (str): WT parameter extracted from GoFile's global.js.
+    
+    Example:
+        >>> gofile = GoFile(authorization_token="abc123")
+        >>> profile = gofile.get_me()
+        >>> print(profile.email)
+    """
 
     base_url = "https://api.gofile.io"
     upload_url = "https://upload.gofile.io/uploadfile"
@@ -45,32 +71,85 @@ class GoFile:
 
     def __init__(
         self,
-        authorization_token,
-        username=None,
-        session: Session = None,
+        authorization_token: str,
+        username: Optional[str] = None,
+        session: Optional[Session] = None,
     ):
+        """
+        Initialize a GoFile client instance.
+        
+        Args:
+            authorization_token: Bearer token for API authentication.
+            username: Optional username for display purposes.
+            session: Optional Requests session. If not provided, a new session is created.
+        """
         self.token = authorization_token
         self.username = username
         self.session = session or Session()
         self.session.headers.update(self._get_headers())
-        self.wt = GoFile.get_wt()
+        self._wt_cache: Optional[str] = None
 
     @staticmethod
-    def get_wt():
-        response = get(GoFile.global_js_url)
-        result = WT_PATTERN.findall(response.text)
-        if result:
-            return result[0]
+    def get_wt() -> Optional[str]:
+        """
+        Extract the WT (write token) parameter from GoFile's global JavaScript file.
+        
+        The WT parameter is required for certain API operations. This method scrapes
+        it from the official GoFile website.
+        
+        Returns:
+            str or None: The WT parameter if found, None otherwise.
+        """
+        try:
+            response = get(GoFile.global_js_url, timeout=10)
+            result = WT_PATTERN.findall(response.text)
+            return result[0] if result else None
+        except Exception as e:
+            logger.warning(f"Failed to fetch WT parameter: {e}")
+            return None
 
-    def _get_headers(
-        self,
-    ):
+    @property
+    def wt(self) -> Optional[str]:
+        """
+        Get WT parameter with caching.
+        
+        Returns:
+            The WT parameter if found, None otherwise.
+        """
+        if self._wt_cache is None:
+            self._wt_cache = GoFile.get_wt()
+        return self._wt_cache
+
+    def _get_headers(self) -> dict:
+        """
+        Generate HTTP headers with authorization.
+        
+        Returns:
+            dict: Dictionary containing authorization headers.
+        """
         return {
             "authorization": f"Bearer {self.token}",
         }
 
     @staticmethod
-    def get_link(mail: Account | str):
+    def get_link(mail: Union[Account, str]) -> dict:
+        """
+        Get a registration link sent to the specified email address.
+        
+        This method initiates the account creation process by requesting
+        an authentication link to be sent to the provided email.
+        
+        Args:
+            mail: Either an Account object or email address string.
+        
+        Returns:
+            dict: API response containing the status of the link request.
+        
+        Example:
+            >>> result = GoFile.get_link("user@example.com")
+            >>> if result.get('status') == 'ok':
+            ...     print("Link sent successfully")
+        """
         if isinstance(mail, Account):
             mail = mail.address
         else:
@@ -83,8 +162,20 @@ class GoFile:
         )
         if response.status_code == 200:
             return response.json()
+        return {}
 
     def get_me(self) -> Profile:
+        """
+        Get the profile information of the authenticated user.
+        
+        Returns:
+            Profile: User profile object containing account details.
+        
+        Example:
+            >>> profile = gofile.get_me()
+            >>> print(f"Email: {profile.email}")
+            >>> print(f"Root Folder ID: {profile.rootFolder}")
+        """
         url = f"{self.base_url}/accounts/website"
         response = self.session.get(
             url,
@@ -93,10 +184,28 @@ class GoFile:
 
     def upload_file(
         self,
-        file_path,
-        folder_id=None,
-        progress_bar=True,
-    ):
+        file_path: Union[str, Path],
+        folder_id: Optional[str] = None,
+        progress_bar: bool = True,
+    ) -> ContentUploadInfo:
+        """
+        Upload a file to GoFile.
+        
+        Args:
+            file_path: Path to the file to upload.
+            folder_id: Optional destination folder ID. If None, uploads to root folder.
+            progress_bar: Whether to display upload progress. Defaults to True.
+        
+        Returns:
+            ContentUploadInfo: Object containing uploaded file information.
+        
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+        
+        Example:
+            >>> result = gofile.upload_file("/path/to/file.txt")
+            >>> print(f"Uploaded file ID: {result.data.id}")
+        """
         file_path = Path(file_path)
         file_size = file_path.stat().st_size
         file_name = file_path.name
@@ -127,17 +236,21 @@ class GoFile:
             }
             if folder_id:
                 data["folderId"] = folder_id
+            
+            def open_file():
+                return open(file_path, "rb")
+            
             m = MultipartEncoder(
                 fields={
                     "file": (
                         file_name,
-                        open(file_path, "rb"),
+                        open_file(),
                     ),
                     **{k: str(v) for k, v in data.items()},
                 }
             )
 
-            # 封装 encoder，监控上传进度
+            # Wrap encoder to monitor upload progress
             monitor = MultipartEncoderMonitor(
                 m,
                 lambda monitor: progress.update(
@@ -160,14 +273,34 @@ class GoFile:
 
     def download_file(
         self,
-        id=None,
-        link=None,
-        output_path=None,
-        chunk_size=1024 * 64,
-        overwrite=False,
-        verify=False,
-        show_process_bar=True,
-    ):
+        id: Optional[str] = None,
+        link: Optional[str] = None,
+        output_path: Optional[Union[str, Path]] = None,
+        chunk_size: int = 1024 * 64,
+        overwrite: bool = False,
+        verify: bool = False,
+        show_process_bar: bool = True,
+    ) -> None:
+        """
+        Download a file from GoFile.
+        
+        Args:
+            id: File ID to download. Either this or 'link' must be provided.
+            link: Direct download link. Either this or 'id' must be provided.
+            output_path: Destination path for the downloaded file.
+            chunk_size: Size of chunks to read at a time (bytes). Default: 64KB.
+            overwrite: Whether to overwrite existing files. Default: False.
+            verify: Whether to verify file integrity using MD5. Default: False.
+            show_process_bar: Whether to display download progress. Default: True.
+        
+        Raises:
+            AssertionError: If neither 'id' nor 'link' is provided.
+            FileExistsError: If output file exists and overwrite is False.
+            ValueError: If MD5 verification fails.
+        
+        Example:
+            >>> gofile.download_file(id="abc123", output_path="./downloads/")
+        """
         assert link or id, "Either link or file id must be provided"
         if verify:
             assert id, "id must be provided if need verify"
@@ -216,7 +349,7 @@ class GoFile:
                 + downloaded_size
             )
 
-            # 使用 rich 显示进度条
+            # Use rich to display progress bar
             progress_desc = TextColumn(
                 "[bold blue]{task.fields[filename]}", justify="right"
             )
@@ -276,12 +409,25 @@ class GoFile:
 
     def create_folder(
         self,
-        # Optional: Print progress or update a progress bar
-        folder_name=None,
+        folder_name: str = None,
+        parent_folder_id: str = None,
     ) -> ContentCreateInfo:
+        """
+        Create a new folder.
+        
+        Args:
+            folder_name: Name of the folder to create. If None, creates with default name.
+            parent_folder_id: ID of the parent folder. If None, creates in root folder.
+        
+        Returns:
+            ContentCreateInfo: Object containing the result of the folder creation.
+        """
         url = f"{self.base_url}/contents/createFolder"
 
-        data = {"parentFolderId": parent_folder_id}
+        data = {}
+        
+        if parent_folder_id:
+            data["parentFolderId"] = parent_folder_id
 
         if folder_name:
             data["folderName"] = folder_name
@@ -295,10 +441,27 @@ class GoFile:
 
     def update_content(
         self,
-        content_id,
-        attribute,
-        attribute_value,
-    ):
+        content_id: str,
+        attribute: str,
+        attribute_value: any,
+    ) -> dict:
+        """
+        Update attributes of a content item (file or folder).
+        
+        Args:
+            content_id: ID of the content to update.
+            attribute: Attribute to update. Must be one of: name, description, tags, public, expiry, password.
+            attribute_value: New value for the attribute.
+        
+        Returns:
+            dict: API response containing the update result.
+        
+        Raises:
+            ValueError: If the specified attribute is not valid.
+        
+        Example:
+            >>> gofile.update_content("abc123", "name", "new_filename.txt")
+        """
         valid_attributes = [
             "name",
             "description",
@@ -329,8 +492,22 @@ class GoFile:
 
     def delete_contents(
         self,
-        contents_id,
+        contents_id: str,
     ) -> ContentDeleteInfo:
+        """
+        Delete content (file or folder) from GoFile.
+        
+        Args:
+            contents_id: ID of the content to delete.
+        
+        Returns:
+            ContentDeleteInfo: Object containing the deletion result.
+        
+        Example:
+            >>> result = gofile.delete_contents("abc123")
+            >>> if result.status == "ok":
+            ...     print("Content deleted successfully")
+        """
         url = f"{self.base_url}/contents"
         data = {"contentsId": contents_id}
 
@@ -344,13 +521,35 @@ class GoFile:
     def get_content_info(
         self,
         content_id: str,
-        password_hash=None,
-        contentFilter=None,
+        password_hash: Optional[str] = None,
+        contentFilter: Optional[str] = None,
         page: int = 1,
         pageSize: int = 1000,
         sortField: str = "name",
         sortDirection: int = 1,
-    ) -> FolderContentInfo | FileContentInfo:
+    ) -> Union[FolderContentInfo, FileContentInfo]:
+        """
+        Get detailed information about a content item (file or folder).
+        
+        Args:
+            content_id: ID of the content to retrieve.
+            password_hash: Optional password hash for protected content.
+            contentFilter: Optional filter for content type.
+            page: Page number for pagination. Default: 1.
+            pageSize: Number of items per page. Default: 1000.
+            sortField: Field to sort by. Default: "name".
+            sortDirection: Sort direction (1 for ascending, -1 for descending). Default: 1.
+        
+        Returns:
+            FolderContentInfo or FileContentInfo: Content information object.
+        
+        Raises:
+            FileNotFoundError: If the content does not exist.
+        
+        Example:
+            >>> info = gofile.get_content_info("abc123")
+            >>> print(f"Type: {info.data.type}, Name: {info.data.name}")
+        """
         url = f"{self.base_url}/contents/{content_id}"
 
         params = {
@@ -362,7 +561,7 @@ class GoFile:
             "wt": self.wt,
         }
         if password_hash:
-            params["password"] = (password_hash,)
+            params["password"] = password_hash
 
         response = self.session.get(
             url,
@@ -378,9 +577,22 @@ class GoFile:
 
     def search_content(
         self,
-        content_id,
-        searched_string,
-    ):
+        content_id: str,
+        searched_string: str,
+    ) -> dict:
+        """
+        Search for content within a folder.
+        
+        Args:
+            content_id: ID of the folder to search in.
+            searched_string: Search query string.
+        
+        Returns:
+            dict: API response containing search results.
+        
+        Example:
+            >>> results = gofile.search_content("folder_id", "keyword")
+        """
         url = f"{self.base_url}/contents/search"
 
         params = {"contentId": content_id, "searchedString": searched_string}
@@ -393,135 +605,161 @@ class GoFile:
 
     def create_direct_link(
         self,
-        content_id,
-        expire_time=None,
-        source_ips_allowed=None,
-        domains_allowed=None,
-        auth=None,
-    ):
-        url = f"{self.base_url}/contents/{content_id}/directlinks"
-
-        data = {}
-
-        if expire_time:
-            data["expireTime"] = expire_time
-
-        if source_ips_allowed:
-            data["sourceIpsAllowed"] = source_ips_allowed
-
-        if domains_allowed:
-            data["domainsAllowed"] = domains_allowed
-
-        if auth:
-            data["auth"] = auth
-
-        response = self.session.post(
-            url,
-            json=data,
-        )
-        return response.json()
+        content_id: str,
+        expire_time: Optional[int] = None,
+        source_ips_allowed: Optional[list] = None,
+        domains_allowed: Optional[list] = None,
+        auth: Optional[dict] = None,
+    ) -> dict:
+        """
+        Create a direct link for a content item.
+        
+        Args:
+            content_id: ID of the content to create a direct link for.
+            expire_time: Optional expiration time in seconds.
+            source_ips_allowed: Optional list of allowed source IP addresses.
+            domains_allowed: Optional list of allowed domains.
+            auth: Optional authentication configuration.
+        
+        Returns:
+            dict: API response containing the created direct link information.
+        
+        Example:
+            >>> result = gofile.create_direct_link("abc123")
+        """
 
     def update_direct_link(
         self,
-        content_id,
-        direct_link_id,
-        expire_time=None,
-        source_ips_allowed=None,
-        domains_allowed=None,
-        auth=None,
-    ):
-        url = f"{self.base_url}/contents/{content_id}/directlinks/{direct_link_id}"
-
-        data = {}
-
-        if expire_time:
-            data["expireTime"] = expire_time
-
-        if source_ips_allowed:
-            data["sourceIpsAllowed"] = source_ips_allowed
-
-        if domains_allowed:
-            data["domainsAllowed"] = domains_allowed
-
-        if auth:
-            data["auth"] = auth
-
-        response = self.session.put(
-            url,
-            json=data,
-        )
-        return response.json()
+        content_id: str,
+        direct_link_id: str,
+        expire_time: Optional[int] = None,
+        source_ips_allowed: Optional[list] = None,
+        domains_allowed: Optional[list] = None,
+        auth: Optional[dict] = None,
+    ) -> dict:
+        """
+        Update an existing direct link.
+        
+        Args:
+            content_id: ID of the content owning the direct link.
+            direct_link_id: ID of the direct link to update.
+            expire_time: Optional new expiration time in seconds.
+            source_ips_allowed: Optional new list of allowed source IPs.
+            domains_allowed: Optional new list of allowed domains.
+            auth: Optional new authentication configuration.
+        
+        Returns:
+            dict: API response containing the updated direct link information.
+        
+        Example:
+            >>> result = gofile.update_direct_link("abc123", "link_id", expire_time=3600)
+        """
 
     def delete_direct_link(
         self,
-        content_id,
-        direct_link_id,
-    ):
-        url = f"{self.base_url}/contents/{content_id}/directlinks/{direct_link_id}"
-
-        response = self.session.delete(
-            url,
-        )
-        return response.json()
+        content_id: str,
+        direct_link_id: str,
+    ) -> dict:
+        """
+        Delete a direct link.
+        
+        Args:
+            content_id: ID of the content owning the direct link.
+            direct_link_id: ID of the direct link to delete.
+        
+        Returns:
+            dict: API response confirming deletion.
+        
+        Example:
+            >>> result = gofile.delete_direct_link("abc123", "link_id")
+        """
 
     def copy_contents(
         self,
-        contents_id,
-        folder_id,
-    ):
-        url = f"{self.base_url}/contents/copy"
-
-        data = {"contentsId": contents_id, "folderId": folder_id}
-
-        response = self.session.post(
-            url,
-            json=data,
-        )
-        return response.json()
+        contents_id: str,
+        folder_id: str,
+    ) -> dict:
+        """
+        Copy content to another folder.
+        
+        Args:
+            contents_id: ID of the content to copy.
+            folder_id: ID of the destination folder.
+        
+        Returns:
+            dict: API response containing the copy operation result.
+        
+        Example:
+            >>> result = gofile.copy_contents("abc123", "dest_folder_id")
+        """
 
     def move_contents(
         self,
-        contents_id,
-        folder_id,
-    ):
-        url = f"{self.base_url}/contents/move"
-
-        data = {"contentsId": contents_id, "folderId": folder_id}
-
-        response = self.session.put(
-            url,
-            json=data,
-        )
-        return response.json()
+        contents_id: str,
+        folder_id: str,
+    ) -> dict:
+        """
+        Move content to another folder.
+        
+        Args:
+            contents_id: ID of the content to move.
+            folder_id: ID of the destination folder.
+        
+        Returns:
+            dict: API response containing the move operation result.
+        
+        Example:
+            >>> result = gofile.move_contents("abc123", "dest_folder_id")
+        """
 
     def import_public_content(
         self,
-        contents_id,
-    ):
-        url = f"{self.base_url}/contents/import"
-
-        data = {"contentsId": contents_id}
-
-        response = self.session.post(
-            url,
-            json=data,
-        )
-        return response.json()
+        contents_id: str,
+    ) -> dict:
+        """
+        Import a public content item to your account.
+        
+        Args:
+            contents_id: ID of the public content to import.
+        
+        Returns:
+            dict: API response containing the import operation result.
+        
+        Example:
+            >>> result = gofile.import_public_content("public_content_id")
+        """
 
     def get_account_id(
         self,
-    ):
-        url = f"{self.base_url}/accounts/getid"
-
-        response = self.session.get(
-            url,
-        )
-        return response.json()
+    ) -> dict:
+        """
+        Get the account ID of the authenticated user.
+        
+        Returns:
+            dict: API response containing the account ID.
+        
+        Example:
+            >>> result = gofile.get_account_id()
+            >>> print(f"Account ID: {result['data']['id']}")
+        """
 
     def get_account_info(
         self,
-        account_id,
+        account_id: str,
     ) -> Profile:
+        """
+        Get profile information for a specific account by ID.
+        
+        Args:
+            account_id: ID of the account to retrieve.
+        
+        Returns:
+            Profile: Profile object containing account information.
+        
+        Example:
+            >>> profile = gofile.get_account_info("account_id")
+            >>> print(f"Email: {profile.email}")
+        """
         url = f"{self.base_url}/accounts/{account_id}"
 
         response = self.session.get(
@@ -531,8 +769,20 @@ class GoFile:
 
     def reset_api_token(
         self,
-        account_id,
-    ):
+        account_id: str,
+    ) -> dict:
+        """
+        Reset the API token for an account.
+        
+        Args:
+            account_id: ID of the account to reset the token for.
+        
+        Returns:
+            dict: API response containing the new token information.
+        
+        Example:
+            >>> result = gofile.reset_api_token("account_id")
+        """
         url = f"{self.base_url}/accounts/{account_id}/resettoken"
 
         response = self.session.post(
