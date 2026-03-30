@@ -1,27 +1,22 @@
-import cmd
 import argparse
-from gofile_cli.api import GoFile, MailTM
-from gofile_cli.config import (
-    CONFIG,
-    MailTMUser,
-    GoFileUser,
-)
-from gofile_cli.entity.mailtm import Token
-from gofile_cli.utils import (
-    message_filter,
-    convert_bytes_to_readable,
-)
-from rich.console import Console
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from traceback import print_exc
+import cmd
 from datetime import datetime, timezone
+from traceback import print_exc
+
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
+
+from gofile_cli.api import GoFile, MailTM
+from gofile_cli.config import CONFIG, GoFileUser, MailTMUser
+from gofile_cli.entity.mailtm import Token
+from gofile_cli.utils import convert_bytes_to_readable, message_filter
 
 time_format = "%Y-%m-%d %H:%M:%S"
 
 
 class GoFileShell(cmd.Cmd):
-    intro = "欢迎使用 GoFile Shell。输入 help 查看帮助。\n"
+    intro = "Welcome to GoFile Shell. Type 'help' for help.\n"
     prompt = "[bold green](gofile-shell)>[/bold green]"
     myconfig = CONFIG
     console = Console()
@@ -92,7 +87,7 @@ class GoFileShell(cmd.Cmd):
                     stop = self.onecmd(line)
                     stop = self.postcmd(stop, line)
                 except KeyboardInterrupt:
-                    self.console.print("\n[bold red]退出中...[/bold red]")
+                    self.console.print("\n[bold red]Exiting...[/bold red]")
                     break
                 except Exception as e:
                     # Handle exceptions from commands - print error and continue or exit
@@ -128,73 +123,73 @@ class GoFileShell(cmd.Cmd):
         parser = argparse.ArgumentParser(prog="")
         subparsers = parser.add_subparsers(dest="")
 
-        # upload 命令
+        # upload command
         upload_parser = subparsers.add_parser(
             "upload",
-            help="上传文件到指定文件夹",
+            help="Upload file to specified folder",
         )
         upload_parser.add_argument(
             "file_path",
             type=str,
             default="",
-            help="要上传的文件路径",
+            help="Path to file to upload",
         )
         upload_parser.add_argument(
             "--id",
             type=str,
             default="",
-            help="目标文件夹 ID",
+            help="Destination folder ID",
         )
 
-        # download 命令
+        # download command
         download_parser = subparsers.add_parser(
             "download",
-            help="下载指定文件",
+            help="Download specified file",
         )
         download_parser.add_argument(
             "id",
             type=str,
-            help="要下载的文件 ID",
+            help="File ID to download",
         )
         download_parser.add_argument(
             "output_path",
             type=str,
-            help="保存路径",
+            help="Save path",
         )
         download_parser.add_argument(
             "--verify",
             action="store_true",
-            help="验证文件",
+            help="Verify file integrity",
         )
         download_parser.add_argument(
             "--overwrite",
             action="store_true",
-            help="覆盖同名文件",
+            help="Overwrite existing files",
         )
 
-        # list 命令
+        # list command
         list_parser = subparsers.add_parser(
             "ls",
-            help="列出指定目录下的内容",
+            help="List contents of specified directory",
         )
         list_parser.add_argument(
             "--id",
             type=str,
             default="",
-            help="要列出的目录 ID",
+            help="Directory ID to list",
         )
 
-        # login 命令
-        login_parser = subparsers.add_parser("login", help="登录")
+        # login command
+        login_parser = subparsers.add_parser("login", help="Login to account")
         login_parser.add_argument(
             "--view_only",
             action="store_true",
-            help="show storaged account only",
+            help="Show stored accounts only",
         )
         login_parser.add_argument(
             "--new",
             action="store_true",
-            help="新建账号",
+            help="Create new account",
         )
 
         return parser
@@ -226,40 +221,40 @@ class GoFileShell(cmd.Cmd):
             raise e
         file_info = result.data
         table = Table(
-            title="文件信息",
+            title="File Information",
             show_header=True,
             header_style="bold magenta",
         )
         table.add_column(
-            "属性",
+            "Property",
             style="cyan",
         )
         table.add_column(
-            "值",
+            "Value",
             style="green",
         )
 
         table.add_row(
-            "名称",
+            "Name",
             file_info.name,
         )
         table.add_row(
-            "类型",
+            "Type",
             file_info.type.capitalize(),
         )
         table.add_row(
-            "大小",
+            "Size",
             convert_bytes_to_readable(file_info.size),
         )
         table.add_row(
-            "创建时间",
+            "Created",
             datetime.fromtimestamp(
                 file_info.createTime,
                 tz=timezone.utc,
             ).strftime(time_format),
         )
         table.add_row(
-            "修改时间",
+            "Modified",
             datetime.fromtimestamp(
                 file_info.modTime,
                 tz=timezone.utc,
@@ -366,47 +361,47 @@ class GoFileShell(cmd.Cmd):
         elif current_info.data.type == "file":
             file_info = current_info.data
             table = Table(
-                title="文件信息",
+                title="File Information",
                 show_header=True,
                 header_style="bold magenta",
             )
             table.add_column(
-                "属性",
+                "Property",
                 style="cyan",
             )
             table.add_column(
-                "值",
+                "Value",
                 style="green",
             )
 
             table.add_row(
-                "名称",
+                "Name",
                 file_info.name,
             )
             table.add_row(
-                "类型",
+                "Type",
                 file_info.type.capitalize(),
             )
             table.add_row(
-                "大小",
+                "Size",
                 convert_bytes_to_readable(file_info.size),
             )
             table.add_row(
-                "创建时间",
+                "Created",
                 datetime.fromtimestamp(
                     file_info.createTime,
                     tz=timezone.utc,
                 ).strftime(time_format),
             )
             table.add_row(
-                "修改时间",
+                "Modified",
                 datetime.fromtimestamp(
                     file_info.modTime,
                     tz=timezone.utc,
                 ).strftime(time_format),
             )
             table.add_row(
-                "下载链接",
+                "Download Link",
                 file_info.link,
             )
             self.console.print(table)
@@ -451,7 +446,7 @@ class GoFileShell(cmd.Cmd):
                 self.current_profile = gofile.get_me()
 
         else:
-            # 查看mtmail账户
+            # View MailTM accounts
             users = MailTMUser.select()
             table = Table(title="Stored MailTM Users")
             table.add_column("Id", style="cyan")
@@ -469,7 +464,7 @@ class GoFileShell(cmd.Cmd):
             # Print the table
             self.console.print(table)
 
-            # 查看gofile账户
+            # View GoFile accounts
             gofiles = GoFileUser.select()
             table = Table(title="Stored GoFile Users")
             table.add_column("Id", style="cyan")
